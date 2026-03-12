@@ -2,38 +2,89 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/auth_provider.dart';
 
-// Provider untuk mengambil data User yang sedang login
+// ─── User Data ───────────────────────────────────────────────────────────────
 final userDataProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   final userId = ref.watch(currentUserIdProvider);
-  if (userId == null) return const Stream.empty();
+  if (userId == null) return Stream.value(null);
 
   return FirebaseFirestore.instance
       .collection('users')
       .doc(userId)
       .snapshots()
-      .map((doc) => doc.data());
+      .map((snap) => snap.data());
 });
 
-// Provider untuk mengambil 5 transaksi terakhir milik user tersebut
-final recentTransactionsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+// ─── All Transactions Stream ──────────────────────────────────────────────────
+final _allTransactionsStreamProvider =
+    StreamProvider<List<Map<String, dynamic>>>((ref) {
   final userId = ref.watch(currentUserIdProvider);
-  if (userId == null) return const Stream.empty();
+  if (userId == null) return Stream.value([]);
 
   return FirebaseFirestore.instance
       .collection('transactions')
-      .where('userId', isEqualTo: userId) // ATURAN WAJIB: Filter by userId
+      .where('userId', isEqualTo: userId)
+      .orderBy('date', descending: true)
       .snapshots()
-      .map((snapshot) {
-        final docs = snapshot.docs.map((doc) => doc.data()).toList();
-        
-        // Sorting lokal berdasarkan waktu pembuatan (terbaru di atas)
-        docs.sort((a, b) {
-          final timeA = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-          final timeB = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-          return timeB.compareTo(timeA);
-        });
-        
-        // Ambil maksimal 5 transaksi untuk di dashboard
-        return docs.take(5).toList();
-      });
+      .map((snap) => snap.docs.map((d) => d.data()).toList());
+});
+
+// ─── Recent Transactions (5 terbaru) ─────────────────────────────────────────
+final recentTransactionsProvider =
+    Provider<AsyncValue<List<Map<String, dynamic>>>>((ref) {
+  final all = ref.watch(_allTransactionsStreamProvider);
+  return all.whenData((list) => list.take(5).toList());
+});
+
+// ─── Dashboard Summary ────────────────────────────────────────────────────────
+class DashboardSummary {
+  final double totalIncome;
+  final double totalExpense;
+  final double balance;
+
+  /// Pengeluaran dikelompokkan per kategori (hanya Expense)
+  final Map<String, double> expenseByCategory;
+
+  const DashboardSummary({
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.balance,
+    required this.expenseByCategory,
+  });
+}
+
+final dashboardSummaryProvider = Provider<AsyncValue<DashboardSummary>>((ref) {
+  final allTxAsync = ref.watch(_allTransactionsStreamProvider);
+  final userAsync = ref.watch(userDataProvider);
+
+  return allTxAsync.whenData((transactions) {
+    double income = 0;
+    double expense = 0;
+    final Map<String, double> byCat = {};
+
+    for (final tx in transactions) {
+      final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+      final type = tx['type'] as String? ?? '';
+      final category = tx['category'] as String? ?? 'Other';
+
+      if (type == 'Income') {
+        income += amount;
+      } else if (type == 'Expense') {
+        expense += amount;
+        byCat[category] = (byCat[category] ?? 0) + amount;
+      }
+    }
+
+    // Saldo = initialBalance + semua income - semua expense
+    final initialBalance = userAsync.whenOrNull(
+          data: (u) => (u?['initialBalance'] as num?)?.toDouble() ?? 0.0,
+        ) ??
+        0.0;
+
+    return DashboardSummary(
+      totalIncome: income,
+      totalExpense: expense,
+      balance: initialBalance + income - expense,
+      expenseByCategory: byCat,
+    );
+  });
 });

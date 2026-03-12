@@ -7,37 +7,66 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
   const AddTransactionScreen({super.key});
 
   @override
-  ConsumerState<AddTransactionScreen> createState() => _AddTransactionScreenState();
+  ConsumerState<AddTransactionScreen> createState() =>
+      _AddTransactionScreenState();
 }
 
-class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
-  String _selectedType = 'Expense'; // Default ke pengeluaran
+class _AddTransactionScreenState
+    extends ConsumerState<AddTransactionScreen> {
+  String _selectedType = 'Expense';
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
   bool _isLoading = false;
 
-  // Daftar kategori sederhana
-  final List<String> _expenseCategories = ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Other'];
-  final List<String> _incomeCategories = ['Salary', 'Freelance', 'Gift', 'Investment', 'Other'];
+  static const List<_CategoryItem> _expenseCategories = [
+    _CategoryItem('Food', Icons.restaurant_outlined),
+    _CategoryItem('Transport', Icons.directions_car_outlined),
+    _CategoryItem('Shopping', Icons.shopping_bag_outlined),
+    _CategoryItem('Bills', Icons.receipt_outlined),
+    _CategoryItem('Entertainment', Icons.movie_outlined),
+    _CategoryItem('Healthcare', Icons.favorite_border_rounded),
+    _CategoryItem('Education', Icons.school_outlined),
+    _CategoryItem('Other', Icons.more_horiz_rounded),
+  ];
 
-  Future<void> _selectDate(BuildContext context) async {
+  static const List<_CategoryItem> _incomeCategories = [
+    _CategoryItem('Salary', Icons.payments_outlined),
+    _CategoryItem('Freelance', Icons.laptop_outlined),
+    _CategoryItem('Gift', Icons.card_giftcard_outlined),
+    _CategoryItem('Investment', Icons.trending_up_outlined),
+    _CategoryItem('Other', Icons.more_horiz_rounded),
+  ];
+
+  Future<void> _selectDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(primary: AppTheme.primaryColor),
+          ),
+          child: child!,
+        );
+      },
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _handleSave() async {
-    if (_amountController.text.isEmpty || _selectedCategory == null) {
+    if (_amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Nominal dan Kategori wajib diisi!")),
+        const SnackBar(content: Text('Please enter an amount')),
+      );
+      return;
+    }
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
       );
       return;
     }
@@ -51,17 +80,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             date: _selectedDate,
             note: _noteController.text.trim(),
           );
-
       if (mounted) {
-        Navigator.pop(context); // Tutup halaman setelah berhasil simpan
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Transaksi berhasil ditambahkan!")),
+          const SnackBar(content: Text('Transaction added!')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -69,113 +98,235 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = _selectedType == 'Expense' ? _expenseCategories : _incomeCategories;
-    final activeColor = _selectedType == 'Expense' ? AppTheme.errorColor : AppTheme.primaryColor;
+    final isExpense = _selectedType == 'Expense';
+    final activeColor =
+        isExpense ? AppTheme.expenseColor : AppTheme.incomeColor;
+    final categories =
+        isExpense ? _expenseCategories : _incomeCategories;
 
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         title: const Text('Add Transaction'),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Segmented Control (Expense / Income)
+            // Type toggle
             Container(
+              height: 46,
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.dividerColor),
               ),
               child: Row(
                 children: [
-                  Expanded(child: _buildTypeButton('Expense', AppTheme.errorColor)),
-                  Expanded(child: _buildTypeButton('Income', AppTheme.primaryColor)),
+                  Expanded(
+                      child: _TypeButton(
+                    label: 'Expense',
+                    isSelected: isExpense,
+                    color: AppTheme.expenseColor,
+                    onTap: () => setState(() {
+                      _selectedType = 'Expense';
+                      _selectedCategory = null;
+                    }),
+                  )),
+                  Expanded(
+                      child: _TypeButton(
+                    label: 'Income',
+                    isSelected: !isExpense,
+                    color: AppTheme.incomeColor,
+                    onTap: () => setState(() {
+                      _selectedType = 'Income';
+                      _selectedCategory = null;
+                    }),
+                  )),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
-            // 2. Amount Input
-            const Text("Amount", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            // Amount
+            const Text('Amount',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary)),
             const SizedBox(height: 8),
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: activeColor),
-              decoration: InputDecoration(
-                prefixText: '\$ ',
-                prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: activeColor),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: activeColor, width: 2),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: activeColor.withValues(alpha: 0.3)),
+              ),
+              child: TextField(
+                controller: _amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: activeColor),
+                decoration: InputDecoration(
+                  prefixText: '\$ ',
+                  prefixStyle: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: activeColor),
+                  hintText: '0',
+                  hintStyle: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: activeColor.withValues(alpha: 0.3)),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 16),
+                  filled: false,
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // 3. Category Grid (Menggunakan Wrap agar responsif)
-            const Text("Category", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            // Category
+            const Text('Category',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary)),
+            const SizedBox(height: 12),
+
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
               children: categories.map((cat) {
-                final isSelected = _selectedCategory == cat;
-                return ChoiceChip(
-                  label: Text(cat),
-                  selected: isSelected,
-                  selectedColor: activeColor.withValues(alpha: 0.2),
-                  labelStyle: TextStyle(
-                    color: isSelected ? activeColor : Colors.black87,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                final isSelected = _selectedCategory == cat.name;
+                return GestureDetector(
+                  onTap: () =>
+                      setState(() => _selectedCategory = cat.name),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? activeColor
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? activeColor
+                            : AppTheme.dividerColor,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(cat.icon,
+                            size: 22,
+                            color: isSelected
+                                ? Colors.white
+                                : AppTheme.textSecondary),
+                        const SizedBox(height: 4),
+                        Text(
+                          cat.name,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  onSelected: (selected) {
-                    setState(() => _selectedCategory = selected ? cat : null);
-                  },
                 );
               }).toList(),
             ),
             const SizedBox(height: 24),
 
-            // 4. Date Picker
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text("Date", style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}"),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () => _selectDate(context),
+            // Date
+            const Text('Date',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary)),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _selectDate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.dividerColor),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined,
+                        size: 18, color: AppTheme.textSecondary),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}',
+                      style: const TextStyle(
+                          fontSize: 14, color: AppTheme.textPrimary),
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: AppTheme.textSecondary, size: 18),
+                  ],
+                ),
+              ),
             ),
-            const Divider(),
+            const SizedBox(height: 24),
 
-            // 5. Notes
-            const SizedBox(height: 16),
+            // Note
+            const Text('Note (optional)',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary)),
+            const SizedBox(height: 8),
             TextField(
               controller: _noteController,
+              maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Notes (Optional)',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                hintText: 'Add a note...',
               ),
             ),
             const SizedBox(height: 32),
 
-            // 6. Save Button
+            // Save Button
             SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 52,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
                 onPressed: _isLoading ? null : _handleSave,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: activeColor,
+                ),
                 child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Save Transaction', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        isExpense ? 'Add Expense' : 'Add Income',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ],
@@ -183,32 +334,46 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTypeButton(String title, Color color) {
-    final isSelected = _selectedType == title;
+class _TypeButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+  const _TypeButton(
+      {required this.label,
+      required this.isSelected,
+      required this.color,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedType = title;
-          _selectedCategory = null; // Reset kategori saat pindah tab
-        });
-      },
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        margin: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: isSelected ? color : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Center(
           child: Text(
-            title,
+            label,
             style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : AppTheme.textSecondary,
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _CategoryItem {
+  final String name;
+  final IconData icon;
+  const _CategoryItem(this.name, this.icon);
 }

@@ -2,20 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-// 1. IMPORT FILE INI (File ini dihasilkan oleh flutterfire configure)
-import 'firebase_options.dart'; 
-
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 2. TAMBAHKAN OPTIONS DI SINI
   await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform, 
+    options: DefaultFirebaseOptions.currentPlatform,
   );
-
   runApp(
     const ProviderScope(
       child: MyApp(),
@@ -32,7 +27,7 @@ class MyApp extends StatelessWidget {
       title: 'Smart Budget Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const LoginScreen(),
-    );
+      home: const SplashScreen(),
+    );  
   }
 }
