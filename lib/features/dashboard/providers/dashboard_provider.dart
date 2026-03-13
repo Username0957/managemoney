@@ -15,6 +15,9 @@ final userDataProvider = StreamProvider<Map<String, dynamic>?>((ref) {
 });
 
 // ─── All Transactions Stream ──────────────────────────────────────────────────
+// CATATAN: Hanya pakai .where() TANPA .orderBy() untuk menghindari
+// error "The query requires an index" dari Firestore.
+// Pengurutan dilakukan secara lokal di Dart menggunakan field createdAt.
 final _allTransactionsStreamProvider =
     StreamProvider<List<Map<String, dynamic>>>((ref) {
   final userId = ref.watch(currentUserIdProvider);
@@ -23,9 +26,20 @@ final _allTransactionsStreamProvider =
   return FirebaseFirestore.instance
       .collection('transactions')
       .where('userId', isEqualTo: userId)
-      .orderBy('date', descending: true)
+      // TIDAK menggunakan .orderBy() di sini
       .snapshots()
-      .map((snap) => snap.docs.map((d) => d.data()).toList());
+      .map((snap) {
+    final docs = snap.docs.map((d) => d.data()).toList();
+
+    // Sort lokal berdasarkan createdAt (terbaru di atas)
+    docs.sort((a, b) {
+      final tA = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      final tB = (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      return tB.compareTo(tA);
+    });
+
+    return docs;
+  });
 });
 
 // ─── Recent Transactions (5 terbaru) ─────────────────────────────────────────
@@ -74,7 +88,7 @@ final dashboardSummaryProvider = Provider<AsyncValue<DashboardSummary>>((ref) {
       }
     }
 
-    // Saldo = initialBalance + semua income - semua expense
+    // Saldo = initialBalance (dari dokumen user) + income - expense
     final initialBalance = userAsync.whenOrNull(
           data: (u) => (u?['initialBalance'] as num?)?.toDouble() ?? 0.0,
         ) ??
